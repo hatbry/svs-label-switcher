@@ -503,8 +503,15 @@ def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir
             print('*' * 50)
 
 
-def label_saver(slide_dir, save_dir):
-    slides = Path(slide_dir).glob('*.svs')
+def label_saver(path, save_dir):
+    if Path(path).is_dir():
+        slides = Path(slide_dir).glob('*.svs')
+    elif Path(path).is_file() and Path(path).suffix == '.svs':
+        slides = [path]
+    else:
+        _error = f'{path} is not a valid file or directory'
+        raise ValueError(_error)
+        
     for slide in slides:
         save_name = Path(save_dir).joinpath(slide.stem + '.jpg')
         try:
