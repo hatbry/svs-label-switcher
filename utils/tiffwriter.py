@@ -81,12 +81,14 @@ class LabelSaver():
         height = label_directory_info['label ifd info'][257]['value']
         bits_per_sample = label_directory_info['label ifd info'][258]['value']
         rows_per_strip = label_directory_info['label ifd info'][278]['value']
+        compression = label_directory_info['label ifd info'][259]['value']
 
         TIFF_LABEL_IFD_TAG_VALUES[256]['value'] = width
         TIFF_LABEL_IFD_TAG_VALUES[257]['value'] = height
         TIFF_LABEL_IFD_TAG_VALUES[258]['data'] = bits_per_sample
         TIFF_LABEL_IFD_TAG_VALUES[278]['value'] = rows_per_strip
         TIFF_LABEL_IFD_TAG_VALUES[279]['value'] = (len(image_data),)
+        TIFF_LABEL_IFD_TAG_VALUES[259]['value'] = compression
             
         self.img.write(struct.pack('<H', num_entries))
 

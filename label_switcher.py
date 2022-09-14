@@ -92,7 +92,14 @@ class BigTiffFile():
         offset_size, reserved = struct.unpack('<HH', bigtiff.read(struct.calcsize('HH')))
         initial_offset = struct.unpack('<Q', bigtiff.read(struct.calcsize('Q')))[0]
         if endian != 'II' or version != 43 or offset_size != 8 or reserved != 0:
-            raise Exception('This file is not supported - not BigTiff')    
+            _error = 'File Not Supported: {}\nEndian: {}\nVersion: {}\nOffset_size: {}\nReserved: {}'.format(
+                self.file_path,
+                endian,
+                version,
+                offset_size,
+                reserved
+                )
+            raise Exception(_error)    
         return initial_offset
         
     def _read_IFDs(self, bigtiff, directory_offset):
@@ -154,16 +161,26 @@ class BigTiffFile():
         proprosed_macro_directory = len(self.tiff_info.items())
 
         label_compression = self.tiff_info[proposed_label_directory][259]['data_offset']
-        if COMPRESSION.get(label_compression) == 'LZW':
+        try:
+            image_description = self.tiff_info[proposed_label_directory][270]['value']
+        except Exception:
+            image_description = None
+
+        if COMPRESSION.get(label_compression) == 'LZW' or b'label' in image_description or b'Label' in image_description:
             self._label = {
                 'label directory': proposed_label_directory,
                 'label ifd info': self.tiff_info[proposed_label_directory],
                 'strip offset': self.tiff_info[proposed_label_directory][273]['data_offset'],
                 'strip byte counts': self.tiff_info[proposed_label_directory][279]['data_offset']
             }
-        
+
         macro_compression = self.tiff_info[proprosed_macro_directory][259]['data_offset']
-        if COMPRESSION.get(macro_compression) in ['JPEG', 'JPEG 7']:
+        try:
+            image_description = self.tiff_info[proprosed_macro_directory][270]['value']
+        except Exception:
+            image_description = None
+
+        if COMPRESSION.get(macro_compression) in ['JPEG', 'JPEG 7'] or b'macro' in image_description or b'Macro' in image_description:
             self._macro = {
                 'macro directory': proprosed_macro_directory,
                 'macro ifd info': self.tiff_info[proprosed_macro_directory],
@@ -265,39 +282,47 @@ class SubImage():
         Returns:
             img: label with image
         """
-        img = Image.new('RGB', img_dims, 'white')
+        
 
         try:
-            myFont = ImageFont.truetype('arial.ttf', size=35) # Windows
+            myFont = ImageFont.truetype('arial.ttf', size=50) # Windows
         except OSError:
             try:
-                myFont = ImageFont.truetype('Arial.ttf', size=35) # Mac
+                myFont = ImageFont.truetype('Arial.ttf', size=50) # Mac
             except OSError:
                     print('FONT NOT FOUND ERROR')
                     sys.exit()
 
-        ruo_text = 'RUO'
-        img_draw = ImageDraw.Draw(img)
-        img_draw.text((img_dims[0]-100, 10), text=ruo_text, font=myFont, fill=(0, 0, 0))
-
+        qr_img = None
         if self.label_params: # qr code string
             qr_data = self.label_params[0]
             if qr_data is not None:
                 qr_img = qrcode.make(qr_data)
-                img.paste(qr_img)
-            
-        
-
-            for line_num, text in enumerate(self.label_params[1:]):
-                y_offset = 40
-                img_draw = ImageDraw.Draw(img)
-
+                width, height = qr_img.size
+        else:
+            width, height = img_dims
                 
+        if qr_img:
+            img_dims = (int(width *1.5), int(height *1.5))
+            
+        img = Image.new('RGB', img_dims, 'white')
+        ruo_text = 'RUO'
+        img_draw = ImageDraw.Draw(img)
+        img_draw.text((img_dims[0]-150, 10), text=ruo_text, font=myFont, fill=(0, 0, 0))
+
+        if qr_img:
+            img.paste(qr_img)
+
+        if self.label_params:
+            for line_num, text in enumerate(self.label_params[1:]):
+                y_offset = 60
+                img_draw = ImageDraw.Draw(img)
 
                 if text:
                     if not isinstance(text, str):
                         text = str(text)
-                    y_coord = 380 + y_offset * line_num # 380 is the distance the text is displaced below the qrcode
+                    
+                    y_coord = height + y_offset * line_num # 380 is the distance the text is displaced below the qrcode
                     img_draw.text((28, y_coord), text, font=myFont, fill=(0, 0, 0))
 
         return img
@@ -353,7 +378,7 @@ class SubImage():
 
 class LabelSwitcher():
     def __init__(self, slide_path, remove_original_label_and_macro: bool=True, \
-        qrcode:str=None, text_line1:str=None, text_line2:str=None, text_line3:str=None) -> None:
+        qrcode:str=None, text_line1:str=None, text_line2:str=None, text_line3:str=None, text_line4:str=None) -> None:
         """WARNING: THIS UTILITY PERFORMS IN PLACE OPERATIONS ON SVS FILES. THE FILES ARE NOT COPIED!
         PLEASE MAKE COPIES PRIOR TO USE.
 
@@ -375,7 +400,7 @@ class LabelSwitcher():
         """
 
         self.slide_path = slide_path
-        label_params=[qrcode, text_line1, text_line2, text_line3]
+        label_params=[qrcode, text_line1, text_line2, text_line3, text_line4]
         self._slide_offset_adjustment = self._get_slide_offset(remove_original_label_and_macro)
         self._label_offset_adjustment, self._label_img = self._get_label_img(label_params)
         self._macro_img = self._get_macro_img()
@@ -425,7 +450,7 @@ def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir
         file_path (str): path to csv files containing appropriate headers
     """
     if Path(file_path).suffix == '.xlsx':
-        df = pd.read_excel(filepath=file_path)
+        df = pd.read_excel(file_path)
     elif Path(file_path).suffix =='.csv':
         df = pd.read_csv(file_path)
     else:
@@ -450,27 +475,44 @@ def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir
         except KeyError:
             qr_data = None
         text_dict = {}
-        expected_text_headers = ['line1', 'line2', 'line3']
+        expected_text_headers = ['line1', 'line2', 'line3', 'line4']
         for text_head in expected_text_headers:
             try:
                 text1 = row[text_head]
+                if len(text1) >= 60:
+                    print(f'Warning: "{text1}" may not fit on label - Recommended string length is 60 - current string is {len(text1)}\n')
                 text_dict[text_head] = text1
-                if len(text1) >= 25:
-                    print(f'Warning: "{text1}" may not fit on label')
+                
             except KeyError:
                 text_dict[text_head] = None
         
+        try:
+            label_switcher = LabelSwitcher(
+                slide_path=slide_path,
+                remove_original_label_and_macro=True,
+                qrcode=qr_data,
+                text_line1=text_dict.get('line1'),
+                text_line2=text_dict.get('line2'),
+                text_line3=text_dict.get('line3'),
+                text_line4=text_dict.get('line4'))
 
-        label_switcher = LabelSwitcher(
-            slide_path=slide_path,
-            remove_original_label_and_macro=True,
-            qrcode=qr_data,
-            text_line1=text_dict.get('line2'),
-            text_line2=text_dict.get('text2'),
-            text_line3=text_dict.get('line3'))
+            label_switcher.switch_labels()
+        except Exception as e:
+            print('*' * 50)
+            print(e)
+            print('*' * 50)
 
-        label_switcher.switch_labels()
 
+def label_saver(slide_dir, save_dir):
+    slides = Path(slide_dir).glob('*.svs')
+    for slide in slides:
+        save_name = Path(save_dir).joinpath(slide.stem + '.jpg')
+        try:
+            label = BigTiffFile(slide)
+            label.save_label(save_name)
+        except Exception as e:
+            print(e)
+        
 
 
 if __name__ == '__main__':
@@ -484,11 +526,17 @@ if __name__ == '__main__':
     single.add_argument('-l1', help='line 1 text')
     single.add_argument('-l2', help='line 2 text')
     single.add_argument('-l3', help='line 3 text')
+    single.add_argument('-l4', help='line 4 text')
 
     multiple = subparsers.add_parser('multiple', help='switch labels on multiple files using a csv or xlsx file')
     multiple.add_argument('-mf', help='path to csv or xlsx file containing list of slides', metavar='File Path', required=True)
     multiple.add_argument('-s', help='path to slide directory - optional (useful if files have switched directories, but names have not)', metavar='Slide Directory')
     multiple.add_argument('-hd', help='column header that contains the slide names or full paths (with or without extensions)', default='File Location', metavar='Column Header')
+
+
+    save_label = subparsers.add_parser('save_label', help='save labels from all slides in one directory to specified directory')
+    save_label.add_argument('-slide', help='slide directory', required=True)
+    save_label.add_argument('-out', help='output directory to save labels', required=True)
     args = parser.parse_args()
 
     if hasattr(args, 'sf'):
@@ -498,8 +546,9 @@ if __name__ == '__main__':
             slide_path=arg_dictionary.get('sf'),
             qrcode=arg_dictionary.get('qr'),
             text_line1=arg_dictionary.get('l1'),
-            text_line2=arg_dictionary.get('l1'),
-            text_line3=arg_dictionary.get('l1')
+            text_line2=arg_dictionary.get('l2'),
+            text_line3=arg_dictionary.get('l3'),
+            text_line4=arg_dictionary.get('l5')
         )
         switcher.switch_labels()
 
@@ -511,4 +560,10 @@ if __name__ == '__main__':
         column_head = arg_dictionary.get('hd')
         switch_labels_from_file(file_path=file_path, slide_dir=slide_dir, col_with_slide_names=column_head)
 
+    elif hasattr(args, 'slide'):
+        arg_dictionary = vars(args)
+        slide_directory = arg_dictionary.get('slide')
+        save_directory = arg_dictionary.get('out')
+        label_saver(slide_directory, save_directory)
+    
     print('Processing complete')
