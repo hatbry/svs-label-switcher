@@ -1,3 +1,7 @@
+'''
+Useful resource: https://www.awaresystems.be/imaging/tiff/bigtiff.html
+'''
+
 from .constants import FORMAT_CHARACTERS
 import io
 import numpy as np
@@ -6,8 +10,8 @@ import struct
 
 TIFF_LABEL_IFD_TAG_VALUES = {
     254: {'type': 4, 'count': 1, 'value': (1,)},
-    256: {'type': 3, 'count': 1, 'value': None}, #width
-    257: {'type': 3, 'count': 1, 'value': None}, #height
+    256: {'type': 4, 'count': 1, 'value': None}, #width
+    257: {'type': 4, 'count': 1, 'value': None}, #height
     258: {'type': 3, 'count': 3, 'value': None, 'data': (8, 8, 8)},
     259: {'type': 3, 'count': 1, 'value': (5,)}, # COMPRESSION
     262: {'type': 3, 'count': 1, 'value': (2,)},
@@ -85,7 +89,7 @@ class LabelSaver():
 
         TIFF_LABEL_IFD_TAG_VALUES[256]['value'] = width
         TIFF_LABEL_IFD_TAG_VALUES[257]['value'] = height
-        TIFF_LABEL_IFD_TAG_VALUES[258]['data'] = bits_per_sample
+        TIFF_LABEL_IFD_TAG_VALUES[258]['value'] = bits_per_sample
         TIFF_LABEL_IFD_TAG_VALUES[278]['value'] = rows_per_strip
         TIFF_LABEL_IFD_TAG_VALUES[279]['value'] = (len(image_data),)
         TIFF_LABEL_IFD_TAG_VALUES[259]['value'] = compression
@@ -100,11 +104,13 @@ class LabelSaver():
             self.img.write(struct.pack('<L', values['count']))
             
             # Determine the size of the data
-            fmt = '<' + str(values['count']) + FORMAT_CHARACTERS[values['type']]
+            count = str(values['count'])
+            _type = FORMAT_CHARACTERS[values['type']]
+            fmt = '<' + count + _type
 
             # If the size of the data is greater than 'L', the data is too large to fit in the IFD
             # and must be placed elsewhere
-            if struct.calcsize(fmt) > struct.calcsize('L'):
+            if struct.calcsize(fmt) > struct.calcsize('<L'):
                 values['value'] = (extra_data_offset, )
 
                 # Write the location where the data will be placed in the IFD
@@ -136,7 +142,14 @@ class LabelSaver():
                 # If the data is not too large, it is written as the value/offset in the IFD
                 if ifd == 273:
                     TIFF_LABEL_IFD_TAG_VALUES[273]['value'] = (extra_data_offset, )
-                self.img.write(struct.pack('<L', *values['value']))
+
+                self.img.write(struct.pack(fmt, *values['value']))
+                post_value_position = self.img.tell()
+
+                data_size = struct.calcsize(fmt)
+                word_boundary_size = struct.calcsize('<L')
+                if data_size < word_boundary_size:
+                    self.img.seek(post_value_position + (word_boundary_size - data_size))
         
         self.img.seek(TIFF_LABEL_IFD_TAG_VALUES[273]['value'][0])
         self.img.write(image_data)
@@ -214,7 +227,10 @@ class BigTiffMaker():
 
         num_entries = len(self.tiff_template)
 
-        extra_data_offset = num_entries * 20 + 16 + 16
+        IFD_SIZE = 20 # each IFD is 20 bytes
+        NUM_ENTRIES_SIZE = 16 # number of entries stored as 8 bytes
+        NEXT_OFFSET_SIZE = 16 # the offset of the next directory is stored in 8 bytes
+        extra_data_offset = NUM_ENTRIES_SIZE + num_entries * IFD_SIZE + NEXT_OFFSET_SIZE
 
         self.img.write(struct.pack('<Q', num_entries))
 
@@ -252,6 +268,7 @@ class BigTiffMaker():
             else:
                 if IFD_tag == 273:
                     self.tiff_template[273]['value'] = (extra_data_offset, )
+                    extra_data_offset += 16
                 distance_to_move = struct.calcsize('Q')
                 current_position = self.img.tell()
                 self.img.write(struct.pack(fmt, *tag_info['value']))

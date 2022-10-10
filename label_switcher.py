@@ -8,9 +8,8 @@ from PIL import Image, ImageDraw, ImageFont
 import qrcode
 import struct
 import sys
-from utils.constants import FORMAT_CHARACTERS, TAGNAMES, TYPE_DICT, COMPRESSION, PHOTOMETRIC_INTERPRETATION
+from utils.constants import FORMAT_CHARACTERS, TAGNAMES, TYPE_DICT, COMPRESSION
 from utils.tiffwriter import BigTiffMaker, LabelSaver
-
 
 
 class BigTiffFile():
@@ -58,16 +57,13 @@ class BigTiffFile():
             tiff.seek(macro_strip_offset)
             tiff.write(b'\0' * macro_byte_count)
 
-    def save_label(self, save_path):
-        """Save the label as a tiff file. Must run this prior to de-identifying
-        the slide.
 
-        Args:
-            save_path (str): path to save file - include extension
+    def get_label(self):
+        """Returns the label image as a Pillow Image object
         """
         ls = LabelSaver()
         img = ls.label(self.label_data, self.label_info)
-        img.save(save_path)
+        return img
 
     def print_IFDs(self, writer=sys.stdout):
         writer.write('=' * 80 + '\n')
@@ -285,10 +281,10 @@ class SubImage():
         
 
         try:
-            myFont = ImageFont.truetype('arial.ttf', size=50) # Windows
+            myFont = ImageFont.truetype('arial.ttf', size=30) # Windows
         except OSError:
             try:
-                myFont = ImageFont.truetype('Arial.ttf', size=50) # Mac
+                myFont = ImageFont.truetype('Arial.ttf', size=30) # Mac
             except OSError:
                     print('FONT NOT FOUND ERROR')
                     sys.exit()
@@ -299,12 +295,15 @@ class SubImage():
             if qr_data is not None:
                 qr_img = qrcode.make(qr_data)
                 width, height = qr_img.size
+                if width < img_dims[0] or height < img_dims[0]:
+                    width, height = img_dims
         else:
             width, height = img_dims
                 
         if qr_img:
             img_dims = (int(width *1.5), int(height *1.5))
-            
+        
+        print(img_dims)
         img = Image.new('RGB', img_dims, 'white')
         ruo_text = 'RUO'
         img_draw = ImageDraw.Draw(img)
@@ -351,8 +350,8 @@ class SubImage():
             if length > struct.calcsize('<Q') or tag == 273:
                 pre_data_offset = tiff_data.tiff_info[1][tag]['pre_data_offset']
                 data_offset = tiff_data.tiff_info[1][tag]['data_offset']
-                                    
-                new_offset = data_offset + offset_adjustment
+
+                new_offset = data_offset + offset_adjustment - 16                    
 
                 updated_offset = struct.pack('<Q', new_offset)
                 file.seek(pre_data_offset)
@@ -402,11 +401,12 @@ class LabelSwitcher():
         self.slide_path = slide_path
         label_params=[qrcode, text_line1, text_line2, text_line3, text_line4]
         self._slide_offset_adjustment = self._get_slide_offset(remove_original_label_and_macro)
-        self._label_offset_adjustment, self._label_img = self._get_label_img(label_params)
+        self._next_ifd_offset_adjustment, self._label_img = self._get_label_img(label_params)
         self._macro_img = self._get_macro_img()
     
     def switch_labels(self):
         with open(self.slide_path, 'rb+') as slide:
+            
             slide.seek(self._slide_offset_adjustment)
 
             self._label_img.seek(16)
@@ -415,7 +415,7 @@ class LabelSwitcher():
 
             self._macro_img.seek(16)
             macro_data = self._macro_img.read()
-            slide.seek(slide.tell() + 16)
+            slide.seek(self._next_ifd_offset_adjustment)
             slide.write(macro_data)
 
     def _get_slide_offset(self, remove_label_and_macro):
@@ -428,13 +428,14 @@ class LabelSwitcher():
         img_creator = SubImage('label', label_params)
         label_image = img_creator.create_image()
         label_image = img_creator.update_ifd(label_image, self._slide_offset_adjustment)
+
         next_ifd_offset = img_creator.offset_adjustment
         return next_ifd_offset, label_image
     
     def _get_macro_img(self):
         img_creator = SubImage('macro')
         macro_image = img_creator.create_image()
-        macro_image = img_creator.update_ifd(macro_image, self._label_offset_adjustment)
+        macro_image = img_creator.update_ifd(macro_image, self._next_ifd_offset_adjustment)
         return macro_image
     
 
@@ -574,3 +575,4 @@ if __name__ == '__main__':
         label_saver(slide_directory, save_directory)
     
     print('Processing complete')
+
