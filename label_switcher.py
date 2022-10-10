@@ -504,9 +504,12 @@ def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir
             print('*' * 50)
 
 
-def label_saver(path, save_dir):
+def label_saver(args: argparse.Namespace):
+    path = args.path
+    output_directory = args.outdir
+
     if Path(path).is_dir():
-        slides = Path(slide_dir).glob('*.svs')
+        slides = Path(path).glob('*.svs')
     elif Path(path).is_file() and Path(path).suffix == '.svs':
         slides = [path]
     else:
@@ -514,65 +517,88 @@ def label_saver(path, save_dir):
         raise ValueError(_error)
         
     for slide in slides:
-        save_name = Path(save_dir).joinpath(slide.stem + '.jpg')
+        save_name = Path(output_directory).joinpath(slide.stem + '.jpg')
         try:
             label = BigTiffFile(slide)
-            label.save_label(save_name)
+            img = label.get_label()
+            img.save(save_name)
         except Exception as e:
             print(e)
-        
+
+def single_slide_switch_labels(args: argparse.Namespace):
+    pass
+
+def multiple_slide_switch_labels(args: argparse.Namespace):
+    pass
+
+
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='SVS Label Switcher', description='''Replaces labels and deletes images from SVS files - only tested on Leica Aperio GT450 v1.0.0 and v1.0.1
-    Supports up to 3 lines of text on a label. The headers for each line should be "text1", "text2", "text3". The QR code column should be labeled "QR"''')
+    Supports up to 3 lines of text on a label. The headers for each line should be "text1", "text2", "text3". The QR code column should be labeled "QR"'''
+    )
 
-    subparsers = parser.add_subparsers(title='Label Switcher', description='"single" is useful to change the label on one file; "multiple" uses a csv or xlsx file for batch swapping')
-    single = subparsers.add_parser('single', help='switch the label on a single svs file')
-    single.add_argument('-sf', help='path to slide', required=True)
-    single.add_argument('-qr', help='qr code text')
-    single.add_argument('-l1', help='line 1 text')
-    single.add_argument('-l2', help='line 2 text')
-    single.add_argument('-l3', help='line 3 text')
-    single.add_argument('-l4', help='line 4 text')
-
-    multiple = subparsers.add_parser('multiple', help='switch labels on multiple files using a csv or xlsx file')
-    multiple.add_argument('-mf', help='path to csv or xlsx file containing list of slides', metavar='File Path', required=True)
-    multiple.add_argument('-s', help='path to slide directory - optional (useful if files have switched directories, but names have not)', metavar='Slide Directory')
-    multiple.add_argument('-hd', help='column header that contains the slide names or full paths (with or without extensions)', default='File Location', metavar='Column Header')
-
-
-    save_label = subparsers.add_parser('save_label', help='save labels from all slides in one directory to specified directory')
-    save_label.add_argument('-slide', help='slide directory', required=True)
-    save_label.add_argument('-out', help='output directory to save labels', required=True)
-    args = parser.parse_args()
-
-    if hasattr(args, 'sf'):
-        arg_dictionary = vars(args)
-        
-        switcher = LabelSwitcher(
-            slide_path=arg_dictionary.get('sf'),
-            qrcode=arg_dictionary.get('qr'),
-            text_line1=arg_dictionary.get('l1'),
-            text_line2=arg_dictionary.get('l2'),
-            text_line3=arg_dictionary.get('l3'),
-            text_line4=arg_dictionary.get('l5')
+    subparsers = parser.add_subparsers(
+        title='Label Switcher', 
+        description='"Single" is useful to change the label on one file; "Multiple" uses a csv or xlsx file for batch swapping'
         )
-        switcher.switch_labels()
-
-    elif hasattr(args, 'mf'):
-        arg_dictionary = vars(args)
-
-        file_path = arg_dictionary.get('mf')
-        slide_dir = arg_dictionary.get('s')
-        column_head = arg_dictionary.get('hd')
-        switch_labels_from_file(file_path=file_path, slide_dir=slide_dir, col_with_slide_names=column_head)
-
-    elif hasattr(args, 'slide'):
-        arg_dictionary = vars(args)
-        slide_directory = arg_dictionary.get('slide')
-        save_directory = arg_dictionary.get('out')
-        label_saver(slide_directory, save_directory)
     
-    print('Processing complete')
+    
+    single = subparsers.add_parser(
+        'single', 
+        help='switch the label on a single svs file'
+        )
+    single.add_argument('-p',help='Path to slide', required=True)
+    single.add_argument('-qr', help='QR code text')
+    single.add_argument('-l1', help='Line 1 text')
+    single.add_argument('-l2', help='Line 2 text')
+    single.add_argument('-l3', help='Line 3 text')
+    single.add_argument('-l4', help='Line 4 text')
+    single.set_defaults(func=single_slide_switch_labels)
+
+
+    multiple = subparsers.add_parser(
+        'multiple', 
+        help='Switch labels on multiple files using a csv or xlsx file'
+        )
+    multiple.add_argument(
+        '-p', 
+        help='path to csv or xlsx file containing list of slides', 
+        metavar='File Path', 
+        required=True
+        )
+    multiple.add_argument(
+        '-s', 
+        help='path to slide directory - optional (useful if files have switched directories, but names have not)', 
+        metavar='Slide Directory'
+        )
+    multiple.add_argument(
+        '-hd',
+        help='column header that contains the slide names or full paths (with or without extensions)',
+        default='File Location',
+        metavar='Column Header'
+        )
+    multiple.set_defaults(func=multiple_slide_switch_labels)
+
+
+    save_label = subparsers.add_parser(
+        'save_label', 
+        help='Save labels from all slides in one directory to specified directory'
+        )
+    save_label.add_argument(
+        '-path', 
+        help='Path to SVS file or directory containing SVS files in BigTiff format', 
+        required=True
+        )
+    save_label.add_argument(
+        '-outdir', 
+        help='Output directory to save labels', 
+        required=True
+        )
+    save_label.set_defaults(func=label_saver)
+
+
+    args = parser.parse_args()
+    args.func(args)
 
