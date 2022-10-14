@@ -30,6 +30,10 @@ class BigTiffFile():
         self._label = None
         self._macro = None
 
+        #TODO add classic tiff support
+        self.endian = None
+        self.bigtiff = False
+
         if isinstance(file_path, io.BytesIO):
             bigtiff = file_path
             next_offset = self._read_header(bigtiff)
@@ -460,7 +464,7 @@ def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir
     for index, row in df.iterrows():
         slide = Path(row[col_with_slide_names])
 
-        if slide_dir:
+        if slide_dir is not None:
             if slide.suffix != '.svs':
                 slide_name = str(slide.name) + '.svs'
             else:
@@ -499,9 +503,7 @@ def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir
 
             label_switcher.switch_labels()
         except Exception as e:
-            print('*' * 50)
-            print(e)
-            print('*' * 50)
+            print('*' * 50, '\n', e, '\n', '*' * 50)
 
 
 def label_saver(args: argparse.Namespace):
@@ -526,11 +528,24 @@ def label_saver(args: argparse.Namespace):
             print(e)
 
 def single_slide_switch_labels(args: argparse.Namespace):
-    pass
+    label_switcher = LabelSwitcher(
+        slide_path=args.p,
+        remove_original_label_and_macro=True,
+        qrcode=args.qr,
+        text_line1=args.l1,
+        text_line2=args.l1,
+        text_line3=args.l1,
+        text_line4=args.l1)
+
+    label_switcher.switch_labels()
+
 
 def multiple_slide_switch_labels(args: argparse.Namespace):
-    pass
-
+    switch_labels_from_file(
+        file_path=args.p,
+        col_with_slide_names=args.hd,
+        slide_dir=args.dir
+    )
 
 
 
@@ -541,7 +556,8 @@ if __name__ == '__main__':
 
     subparsers = parser.add_subparsers(
         title='Label Switcher', 
-        description='"Single" is useful to change the label on one file; "Multiple" uses a csv or xlsx file for batch swapping'
+        description='"Single" is useful to change the label on one file; "Multiple" uses a csv or xlsx file for batch swapping',
+        metavar='Commands'
         )
     
     
@@ -549,12 +565,12 @@ if __name__ == '__main__':
         'single', 
         help='switch the label on a single svs file'
         )
-    single.add_argument('-p',help='Path to slide', required=True)
-    single.add_argument('-qr', help='QR code text')
-    single.add_argument('-l1', help='Line 1 text')
-    single.add_argument('-l2', help='Line 2 text')
-    single.add_argument('-l3', help='Line 3 text')
-    single.add_argument('-l4', help='Line 4 text')
+    single.add_argument('-p',help='Path to slide', required=True, metavar='path')
+    single.add_argument('-qr', help='QR code text', default=None)
+    single.add_argument('-l1', help='Line 1 text', default=None, metavar='Line 1')
+    single.add_argument('-l2', help='Line 2 text', default=None, metavar='Line 2')
+    single.add_argument('-l3', help='Line 3 text', default=None, metavar='Line 3')
+    single.add_argument('-l4', help='Line 4 text', default=None, metavar='Line 4')
     single.set_defaults(func=single_slide_switch_labels)
 
 
@@ -565,25 +581,24 @@ if __name__ == '__main__':
     multiple.add_argument(
         '-p', 
         help='path to csv or xlsx file containing list of slides', 
-        metavar='File Path', 
         required=True
         )
     multiple.add_argument(
-        '-s', 
-        help='path to slide directory - optional (useful if files have switched directories, but names have not)', 
-        metavar='Slide Directory'
+    '-hd',
+    help='column header that contains the slide names or full paths (with or without extensions)',
+    default='File Location'
         )
     multiple.add_argument(
-        '-hd',
-        help='column header that contains the slide names or full paths (with or without extensions)',
-        default='File Location',
-        metavar='Column Header'
+        '-dir', 
+        help='path to slide directory - optional (useful if files have switched directories, but names have not)', 
+        default=None
         )
+    
     multiple.set_defaults(func=multiple_slide_switch_labels)
 
 
     save_label = subparsers.add_parser(
-        'save_label', 
+        'label', 
         help='Save labels from all slides in one directory to specified directory'
         )
     save_label.add_argument(
@@ -593,7 +608,7 @@ if __name__ == '__main__':
         )
     save_label.add_argument(
         '-outdir', 
-        help='Output directory to save labels', 
+        help='Output directory to save label(s)', 
         required=True
         )
     save_label.set_defaults(func=label_saver)
