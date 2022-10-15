@@ -86,32 +86,55 @@ class BigTiffFile():
             writer.write('Next Directory Offset: {}\n'.format(self.next_dir_offsets[directory]['next_ifd_offset']))
             writer.write('\n')
 
+    def _fmt(self, fmt):
+        if not self.bigtiff:
+            fmt = fmt.replace('Q', 'H')
+
     def _read_header(self, bigtiff):
         endian = bigtiff.read(2).decode('UTF-8')
+        if endian == 'II':
+            self.endian = '<'
+        else:
+            endian = '>'
+
         version = struct.unpack('<H', bigtiff.read(struct.calcsize('H')))[0]
+        if version == 43:
+            self.bigtiff = True
+        elif version == 42:
+            self.bigtiff == False
+        else:
+            raise ValueError('Incorrect file type')
         offset_size, reserved = struct.unpack('<HH', bigtiff.read(struct.calcsize('HH')))
-        initial_offset = struct.unpack('<Q', bigtiff.read(struct.calcsize('Q')))[0]
-        if endian != 'II' or version != 43 or offset_size != 8 or reserved != 0:
-            _error = 'File Not Supported: {}\nEndian: {}\nVersion: {}\nOffset_size: {}\nReserved: {}'.format(
-                self.file_path,
-                endian,
-                version,
-                offset_size,
-                reserved
-                )
-            raise Exception(_error)    
+
+        if self.bigtiff:
+            initial_offset = struct.unpack('<Q', bigtiff.read(struct.calcsize('Q')))[0]
+        else:
+            initial_offset = offset_size
+          
         return initial_offset
         
     def _read_IFDs(self, bigtiff, directory_offset):
         self.directory_count += 1
         bigtiff.seek(directory_offset)
         IFD_info = {}
-        num_of_entries = struct.unpack('<Q', bigtiff.read(8))[0]
+        if self.bigtiff:
+            entries_fmt = self.endian + 'Q'
+            tag_fmt = self.endian + 'HHQ'
+            data_offset_fmt = self.endian + 'Q'
+            next_offset_fmt = self.endian + 'Q'
+        else:
+            entries_fmt = self.endian + 'H'
+            tag_fmt = self.endian + 'HHL'
+            data_offset_fmt = self.endian + 'L'
+            next_offset_fmt = self.endian + 'L'
+        
+        num_of_entries = struct.unpack(entries_fmt, bigtiff.read(struct.calcsize(entries_fmt)))[0]
+
         for _ in range(num_of_entries):
             tag_offset = bigtiff.tell()
-            IFD_tag, IFD_type, IFD_count = struct.unpack('<HHQ', bigtiff.read(struct.calcsize('<HHQ')))
+            IFD_tag, IFD_type, IFD_count = struct.unpack(tag_fmt, bigtiff.read(struct.calcsize(tag_fmt)))
             pre_data_offset = bigtiff.tell()
-            data_offset = struct.unpack('<Q', bigtiff.read(struct.calcsize('<Q')))[0]
+            data_offset = struct.unpack(data_offset_fmt, bigtiff.read(struct.calcsize(data_offset_fmt)))[0]
 
             IFD_info[IFD_tag] = {
                 'pre_tag_offset': tag_offset,
@@ -124,7 +147,7 @@ class BigTiffFile():
         # position before the next IFD offset. This can be used to change
         # the location of the next IFD
         offset_before_next_ifd_offset = bigtiff.tell()
-        next_ifd_offset = struct.unpack('<Q', bigtiff.read(8))[0]
+        next_ifd_offset = struct.unpack(next_offset_fmt, bigtiff.read(struct.calcsize(next_offset_fmt)))[0]
         self.tiff_info[self.directory_count] = IFD_info
         self.directory_offsets[self.directory_count] = directory_offset
         self.next_dir_offsets[self.directory_count] = {
@@ -138,7 +161,11 @@ class BigTiffFile():
     def _ifd_value(self, ifd_tag, ifd_type, ifd_count, pre_data_offset, data_offset, bigtiff):
         fmt = '<' + str(ifd_count) + FORMAT_CHARACTERS[ifd_type]
         length = struct.calcsize(fmt)
-        if length <= struct.calcsize('Q'):
+        if self.bigtiff:
+            size = 'Q'
+        else:
+            size = 'L'
+        if length <= struct.calcsize(size):
             start = bigtiff.tell()
             bigtiff.seek(pre_data_offset)
             value = struct.unpack(fmt, bigtiff.read(struct.calcsize(fmt)))
@@ -616,4 +643,3 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     args.func(args)
-
