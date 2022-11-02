@@ -303,7 +303,7 @@ class SubImage():
         img = Image.new('RGB', img_dims, 'red')
         return img
         
-    def _create_label(self, img_dims =(609, 567)):
+    def _create_label(self, img_dims =(609, 567), font_size = 30):
         """Creates a label image with a QR code and text under the QR code
 
         Returns:
@@ -312,29 +312,29 @@ class SubImage():
         
 
         try:
-            myFont = ImageFont.truetype('arial.ttf', size=30) # Windows
+            myFont = ImageFont.truetype('arial.ttf', size=font_size) # Windows
         except OSError:
             try:
-                myFont = ImageFont.truetype('Arial.ttf', size=30) # Mac
+                myFont = ImageFont.truetype('Arial.ttf', size=font_size) # Mac
             except OSError:
                     print('FONT NOT FOUND ERROR')
                     sys.exit()
 
         qr_img = None
+        qr_width = 0
+        qr_height = 0
         if self.label_params: # qr code string
             qr_data = self.label_params[0]
             if qr_data is not None:
                 qr_img = qrcode.make(qr_data)
-                width, height = qr_img.size
-                if width < img_dims[0] or height < img_dims[0]:
+                print(qr_img.size)
+                qr_width, qr_height = qr_img.size
+                if qr_width < img_dims[0] or qr_height < img_dims[0]:
                     width, height = img_dims
-        else:
-            width, height = img_dims
-                
-        if qr_img:
-            img_dims = (int(width *1.5), int(height *1.5))
-        
-        print(img_dims)
+                else:
+                    img_dims = (int(qr_width *1.5), int(qr_height *1.5))
+
+
         img = Image.new('RGB', img_dims, 'white')
         ruo_text = 'RUO'
         img_draw = ImageDraw.Draw(img)
@@ -345,14 +345,14 @@ class SubImage():
 
         if self.label_params:
             for line_num, text in enumerate(self.label_params[1:]):
-                y_offset = 60
+                y_offset = qr_height + 20
                 img_draw = ImageDraw.Draw(img)
 
                 if text:
                     if not isinstance(text, str):
                         text = str(text)
                     
-                    y_coord = height + y_offset * line_num # 380 is the distance the text is displaced below the qrcode
+                    y_coord = y_offset + line_num * font_size
                     img_draw.text((28, y_coord), text, font=myFont, fill=(0, 0, 0))
 
         return img
@@ -470,7 +470,7 @@ class LabelSwitcher():
         return macro_image
     
 
-def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir: str=None):
+def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir):
     """THIS IS A DESTRUCTIVE PROCESS - MAKE COPIES FIRST! Deletes the original label and macro image 
     on a slide and replaces the label with a custom label containing a QR code 
     and up to 3 lines of text. The CSV file must include at least a 'File Location' 
@@ -510,7 +510,7 @@ def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir
         expected_text_headers = ['line1', 'line2', 'line3', 'line4']
         for text_head in expected_text_headers:
             try:
-                text1 = row[text_head]
+                text1 = str(row[text_head])
                 if len(text1) >= 60:
                     print(f'Warning: "{text1}" may not fit on label - Recommended string length is 60 - current string is {len(text1)}\n')
                 text_dict[text_head] = text1
