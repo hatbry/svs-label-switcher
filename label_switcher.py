@@ -506,6 +506,10 @@ def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir
             qr_data = row['QR']
         except KeyError:
             qr_data = None
+
+        if qr_data == 'None':
+            qr_data = None
+        
         text_dict = {}
         expected_text_headers = ['line1', 'line2', 'line3', 'line4']
         for text_head in expected_text_headers:
