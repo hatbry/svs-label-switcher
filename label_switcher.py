@@ -8,8 +8,8 @@ from PIL import Image, ImageDraw, ImageFont
 import qrcode
 import struct
 import sys
-from utils.constants import FORMAT_CHARACTERS, TAGNAMES, TYPE_DICT, COMPRESSION
-from utils.tiffwriter import BigTiffMaker, LabelSaver
+from .utils.constants import FORMAT_CHARACTERS, TAGNAMES, TYPE_DICT, COMPRESSION
+from .utils.tiffwriter import BigTiffMaker, LabelSaver
 
 
 class BigTiffFile():
@@ -512,16 +512,21 @@ def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir
         
         text_dict = {}
         expected_text_headers = ['line1', 'line2', 'line3', 'line4']
-        for text_head in expected_text_headers:
+        expected_text_headers2 = ['Text1', 'Text2', 'Text3', 'Text4']
+        for text_head1, text_head2 in zip(expected_text_headers, expected_text_headers2):
             try:
-                text1 = str(row[text_head])
+                text1 = str(row[text_head1])
+            except KeyError:
+                try:
+                    text1 = str(row[text_head2])
+                except KeyError:
+                    text1 = None
+
+            if isinstance(text1, str): 
                 if len(text1) >= 60:
                     print(f'Warning: "{text1}" may not fit on label - Recommended string length is 60 - current string is {len(text1)}\n')
-                text_dict[text_head] = text1
+            text_dict[text_head1] = text1
                 
-            except KeyError:
-                text_dict[text_head] = None
-        
         try:
             label_switcher = LabelSwitcher(
                 slide_path=slide_path,
