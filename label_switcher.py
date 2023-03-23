@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw, ImageFont
 import qrcode
 import struct
 import sys
+import time
 from .utils.constants import FORMAT_CHARACTERS, TAGNAMES, TYPE_DICT, COMPRESSION
 from .utils.tiffwriter import BigTiffMaker, LabelSaver
 
@@ -290,11 +291,11 @@ class SubImage():
         img = np.array(img)
 
         if self.file_type == 'label':
-            btm = BigTiffMaker(img, 'label', 'Aperio Leica Biosystems - label 609x567')
+            btm = BigTiffMaker(img, 'label')
             img = btm.create_image()
 
         else:
-            btm = BigTiffMaker(img, 'macro', 'Aperio Leica Biosystems - macro 1494x606')
+            btm = BigTiffMaker(img, 'macro')
             img = btm.create_image()
         
         return img
@@ -327,7 +328,6 @@ class SubImage():
             qr_data = self.label_params[0]
             if qr_data is not None:
                 qr_img = qrcode.make(qr_data)
-                print(qr_img.size)
                 qr_width, qr_height = qr_img.size
                 if qr_width < img_dims[0] or qr_height < img_dims[0]:
                     width, height = img_dims
@@ -487,13 +487,14 @@ def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir
         df = pd.read_csv(file_path)
     else:
         raise Exception('Only accepts csv and xlsx files')
-
+    
+    chance_to_abort = True
     for index, row in df.iterrows():
         slide = Path(row[col_with_slide_names])
 
         if slide_dir is not None:
             if slide.suffix != '.svs':
-                slide_name = str(slide.name) + '.svs'
+                slide_name = slide.stem + '.svs'
             else:
                 slide_name = slide.name
 
@@ -513,6 +514,7 @@ def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir
         text_dict = {}
         expected_text_headers = ['line1', 'line2', 'line3', 'line4']
         expected_text_headers2 = ['Text1', 'Text2', 'Text3', 'Text4']
+        
         for text_head1, text_head2 in zip(expected_text_headers, expected_text_headers2):
             try:
                 text1 = str(row[text_head1])
@@ -528,6 +530,11 @@ def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir
             text_dict[text_head1] = text1
                 
         try:
+            print(slide_path)
+            if chance_to_abort:
+                print('5 seconds to abort. Press Ctrl+C to quit')
+                time.sleep(5)
+                chance_to_abort = False
             label_switcher = LabelSwitcher(
                 slide_path=slide_path,
                 remove_original_label_and_macro=True,
@@ -539,12 +546,11 @@ def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir
 
             label_switcher.switch_labels()
         except Exception as e:
-            print('*' * 50, '\n', e, '\n', '*' * 50)
+            print('*' * 50, '\n', e, '\n', slide_path, '\n', '*' * 50)
 
 
-def label_saver(args: argparse.Namespace):
-    path = args.path
-    output_directory = args.outdir
+def label_saver(output_directory: str, slide_path: str):
+    path = slide_path
 
     if Path(path).is_dir():
         slides = Path(path).glob('*.svs')
@@ -555,7 +561,7 @@ def label_saver(args: argparse.Namespace):
         raise ValueError(_error)
         
     for slide in slides:
-        save_name = Path(output_directory).joinpath(slide.stem + '.jpg')
+        save_name = Path(output_directory).joinpath(Path(slide).stem + '.jpg')
         try:
             label = BigTiffFile(slide)
             img = label.get_label()

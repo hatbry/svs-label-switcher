@@ -196,7 +196,7 @@ class BigTiffMaker():
             raise ValueError(error)
 
         if description is None:
-            self.tiff_template.popitem(270)
+            self.tiff_template.pop(270, None)
         else:
             count = len(description)
             self.tiff_template[270]['count'] = count
