@@ -8,8 +8,8 @@ from PIL import Image, ImageDraw, ImageFont
 import qrcode
 import struct
 import sys
-from utils.constants import FORMAT_CHARACTERS, TAGNAMES, TYPE_DICT, COMPRESSION
-from utils.tiffwriter import BigTiffMaker, LabelSaver
+from .utils.constants import FORMAT_CHARACTERS, TAGNAMES, TYPE_DICT, COMPRESSION
+from .utils.tiffwriter import BigTiffMaker, LabelSaver
 
 
 class BigTiffFile():
@@ -54,7 +54,10 @@ class BigTiffFile():
         label_byte_count = self._label['strip byte counts']
         macro_strip_offset = self._macro['strip offset']
         macro_byte_count = self._macro['strip byte counts']
-
+        
+        if 'DigitalPathology' in str(self.file_path):
+            raise RuntimeError('Cannot remove labels in provided directory!!')
+        
         with open(self.file_path, 'rb+') as tiff:
             tiff.seek(label_strip_offset)
             tiff.write(b'\0' * label_byte_count)
@@ -474,7 +477,9 @@ def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir
         else:
             slide_path = Path(slide)
 
-
+        if 'DigitalPathology' in str(slide_path):
+            raise RuntimeError('Cannot remove labels in provided directory!!')
+        
         try:
             qr_data = row['QR']
         except KeyError:
