@@ -309,8 +309,7 @@ class SubImage():
                 
         if qr_img:
             img_dims = (int(width *1.5), int(height *1.5))
-        
-        print(img_dims)
+    
         img = Image.new('RGB', img_dims, 'white')
         ruo_text = 'RUO'
         img_draw = ImageDraw.Draw(img)
