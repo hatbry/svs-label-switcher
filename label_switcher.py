@@ -266,11 +266,11 @@ class SubImage():
         img = np.array(img)
 
         if self.file_type == 'label':
-            btm = BigTiffMaker(img, 'label', 'Aperio Leica Biosystems - label 609x567')
+            btm = BigTiffMaker(img, 'label')
             img = btm.create_image()
 
         else:
-            btm = BigTiffMaker(img, 'macro', 'Aperio Leica Biosystems - macro 1494x606')
+            btm = BigTiffMaker(img, 'macro')
             img = btm.create_image()
         
         return img
@@ -495,7 +495,11 @@ def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir
             except KeyError:
                 text_dict[text_head] = None
         
+        if int(Path(slide_path).stem[:5]) < 563:
+            continue
+
         try:
+
             label_switcher = LabelSwitcher(
                 slide_path=slide_path,
                 remove_original_label_and_macro=True,

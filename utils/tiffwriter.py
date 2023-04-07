@@ -196,13 +196,15 @@ class BigTiffMaker():
             raise ValueError(error)
 
         if description is None:
-            self.tiff_template.popitem(270)
+            self.tiff_template.pop(270)
+            
         else:
-            count = len(description)
-            self.tiff_template[270]['count'] = count
+            self.tiff_template.pop(270)
+            ##count = len(description)
+            #self.tiff_template[270]['count'] = count
 
-            description = [x.encode('UTF-8') for x in description]
-            self.tiff_template[270]['data'] = description
+            #description = [x.encode('UTF-8') for x in description]
+            #self.tiff_template[270]['data'] = description
 
 
     def _update_image_info(self):
