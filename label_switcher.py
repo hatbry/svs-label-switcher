@@ -1,3 +1,10 @@
+import sys
+import os
+
+current = os.path.dirname(os.path.realpath(__file__))
+parent = os.path.dirname(current)
+sys.path.append(parent)
+
 import argparse
 import io
 import numpy as np
@@ -9,8 +16,8 @@ import qrcode
 import struct
 import sys
 import time
-from .utils.constants import FORMAT_CHARACTERS, TAGNAMES, TYPE_DICT, COMPRESSION
-from .utils.tiffwriter import BigTiffMaker, LabelSaver
+from utils.constants import FORMAT_CHARACTERS, TAGNAMES, TYPE_DICT, COMPRESSION
+from utils.tiffwriter import BigTiffMaker, LabelSaver
 
 
 class BigTiffFile():
@@ -265,7 +272,7 @@ class SubImage():
         Args:
             file_type (str): Must be 'label' or 'macro'
             temp_dir (str): directory to store the saved label and macro images
-            label_params (dict, optional): Contains the text for the QR code and any desired
+            label_params (list, optional): Contains the text for the QR code and any desired
             sub text beneath the QR code. Supports ~ 3 lines of text. More may not fit on 
             the label. Defaults to None.
 
