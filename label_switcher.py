@@ -820,7 +820,7 @@ class LabelSwitcher():
         return macro_image
     
 
-def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir):
+def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir: str=None):
     """THIS IS A DESTRUCTIVE PROCESS - MAKE COPIES FIRST! Deletes the original label and macro image 
     on a slide and replaces the label with a custom label containing a QR code 
     and up to 3 lines of text. The CSV file must include at least a 'File Location' 
@@ -858,7 +858,7 @@ def switch_labels_from_file(file_path: str, col_with_slide_names: str, slide_dir
         except KeyError:
             qr_data = None
 
-        if qr_data == 'None':
+        if qr_data == 'None' or pd.isna(qr_data):
             qr_data = None
         
         text_dict = {}
