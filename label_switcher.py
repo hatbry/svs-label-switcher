@@ -544,13 +544,13 @@ class BigTiffFile():
         except Exception:
             image_description = None
 
-        if COMPRESSION.get(label_compression) == 'LZW' or b'label' in image_description or b'Label' in image_description:
-            self._label = {
-                'label directory': proposed_label_directory,
-                'label ifd info': self.tiff_info[proposed_label_directory],
-                'strip offset': self.tiff_info[proposed_label_directory][273]['data_offset'],
-                'strip byte counts': self.tiff_info[proposed_label_directory][279]['data_offset']
-            }
+        #if COMPRESSION.get(label_compression) == 'LZW' or b'label' in image_description or b'Label' in image_description:
+        self._label = {
+            'label directory': proposed_label_directory,
+            'label ifd info': self.tiff_info[proposed_label_directory],
+            'strip offset': self.tiff_info[proposed_label_directory][273]['data_offset'],
+            'strip byte counts': self.tiff_info[proposed_label_directory][279]['data_offset']
+        }
 
         macro_compression = self.tiff_info[proprosed_macro_directory][259]['data_offset']
         try:
@@ -558,13 +558,13 @@ class BigTiffFile():
         except Exception:
             image_description = None
 
-        if COMPRESSION.get(macro_compression) in ['JPEG', 'JPEG 7'] or b'macro' in image_description or b'Macro' in image_description:
-            self._macro = {
-                'macro directory': proprosed_macro_directory,
-                'macro ifd info': self.tiff_info[proprosed_macro_directory],
-                'strip offset': self.tiff_info[proprosed_macro_directory][273]['data_offset'],
-                'strip byte counts': self.tiff_info[proprosed_macro_directory][279]['data_offset']
-            }
+        #if COMPRESSION.get(macro_compression) in ['JPEG', 'JPEG 7'] or b'macro' in image_description or b'Macro' in image_description:
+        self._macro = {
+            'macro directory': proprosed_macro_directory,
+            'macro ifd info': self.tiff_info[proprosed_macro_directory],
+            'strip offset': self.tiff_info[proprosed_macro_directory][273]['data_offset'],
+            'strip byte counts': self.tiff_info[proprosed_macro_directory][279]['data_offset']
+        }
 
     @property
     def label_IFD_offset_adjustment(self):
@@ -781,8 +781,11 @@ class LabelSwitcher():
 
         self.slide_path = slide_path
         label_params=[qrcode, text_line1, text_line2, text_line3, text_line4]
+        print('Offset')
         self._slide_offset_adjustment = self._get_slide_offset(remove_original_label_and_macro)
+        print('getting label img')
         self._next_ifd_offset_adjustment, self._label_img = self._get_label_img(label_params)
+        print('getting macro')
         self._macro_img = self._get_macro_img()
     
     def switch_labels(self):
