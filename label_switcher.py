@@ -266,7 +266,7 @@ class BigTiffMaker():
         self._write_ifds()
         return self.img
 
-    def _update_tiff_template(self, description):
+    def _update_tiff_template(self, description: str):
         self.tiff_template[256]['value'] = (self.width,)
         self.tiff_template[257]['value'] = (self.height,)
         self.tiff_template[278]['value'] = (self.height,)
@@ -282,6 +282,7 @@ class BigTiffMaker():
         if description is None:
             self.tiff_template.pop(270, None)
         else:
+            description += '\0'
             count = len(description)
             self.tiff_template[270]['count'] = count
 
